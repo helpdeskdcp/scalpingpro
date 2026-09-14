@@ -1,0 +1,19 @@
+[Unit]
+Description=ShareMarket Pro / ScalpingPro Trading Terminal Engine
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/scalpingpro
+Environment=NODE_ENV=production
+EnvironmentFile=/var/www/scalpingpro/.env
+ExecStart=/usr/bin/node /var/www/scalpingpro/dist/server.cjs
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=scalpingpro
+
+[Install]
+WantedBy=multi-user.target

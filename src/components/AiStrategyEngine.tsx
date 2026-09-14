@@ -45,6 +45,20 @@ export const AiStrategyEngine: React.FC = () => {
   const [backtestLoading, setBacktestLoading] = useState(false);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
 
+  // Handle opening and running historical backtest
+  const handleOpenBacktest = async (tf: '6M' | '1Y' | '3Y' = backtestTimeframe) => {
+    setShowBacktestModal(true);
+    setBacktestLoading(true);
+    try {
+      const result = await runStrategyBacktest(activeStrategy.id, tf, activeTicker.symbol);
+      setBacktestResult(result);
+    } catch (err) {
+      console.warn('Backtest execution error:', err);
+    } finally {
+      setBacktestLoading(false);
+    }
+  };
+
   // Handle Risk level change
   const handleRiskChange = (risk: 'CONSERVATIVE' | 'BALANCED' | 'AGGRESSIVE') => {
     setSelectedRisk(risk);
@@ -340,7 +354,7 @@ export const AiStrategyEngine: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                    {activeStrategy.title} — Quantitative Backtest
+                    {activeStrategy.name} — Quantitative Backtest
                     <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 font-mono">
                       {activeTicker.symbol}
                     </span>
