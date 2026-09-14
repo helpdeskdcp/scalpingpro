@@ -1,0 +1,6 @@
+{
+  "name": "ShareMarket Pro - Trading Terminal & Analytics",
+  "description": "Real-time share market trading platform with F&O options analytics, SEBI-compliant probabilistic AI strategies, Angel One integration, and portfolio management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
