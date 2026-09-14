@@ -284,33 +284,41 @@ export const PortfolioView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/40">
-              {holdings.map(h => {
-                const isProfit = h.totalPnl >= 0;
-                return (
-                  <tr key={h.symbol} className="hover:bg-slate-800/40 transition">
-                    <td className="py-2.5 px-3">
-                      <div className="font-bold text-white">{h.symbol}</div>
-                      <div className="text-[10px] text-slate-400">{h.name}</div>
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-bold text-white">{h.quantity}</td>
-                    <td className="py-2.5 px-3 text-right text-slate-300">₹{h.avgCost.toFixed(2)}</td>
-                    <td className="py-2.5 px-3 text-right font-bold text-white">₹{h.ltp.toFixed(2)}</td>
-                    <td className="py-2.5 px-3 text-right font-bold text-white">
-                      ₹{h.curVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td
-                      className={`py-2.5 px-3 text-right font-extrabold ${
-                        isProfit ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {isProfit ? '+' : ''}₹{h.totalPnl.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      <span className="text-[10px] block font-normal">
-                        ({isProfit ? '+' : ''}{h.totalPnlPercent.toFixed(2)}%)
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+              {holdings.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-500">
+                    No equity delivery holdings. Buy stocks in CNC/Delivery mode to build your portfolio.
+                  </td>
+                </tr>
+              ) : (
+                holdings.map(h => {
+                  const isProfit = h.totalPnl >= 0;
+                  return (
+                    <tr key={h.symbol} className="hover:bg-slate-800/40 transition">
+                      <td className="py-2.5 px-3">
+                        <div className="font-bold text-white">{h.symbol}</div>
+                        <div className="text-[10px] text-slate-400">{h.name}</div>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-bold text-white">{h.quantity}</td>
+                      <td className="py-2.5 px-3 text-right text-slate-300">₹{h.avgCost.toFixed(2)}</td>
+                      <td className="py-2.5 px-3 text-right font-bold text-white">₹{h.ltp.toFixed(2)}</td>
+                      <td className="py-2.5 px-3 text-right font-bold text-white">
+                        ₹{h.curVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td
+                        className={`py-2.5 px-3 text-right font-extrabold ${
+                          isProfit ? 'text-emerald-400' : 'text-rose-400'
+                        }`}
+                      >
+                        {isProfit ? '+' : ''}₹{h.totalPnl.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        <span className="text-[10px] block font-normal">
+                          ({isProfit ? '+' : ''}{h.totalPnlPercent.toFixed(2)}%)
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         )}
@@ -330,42 +338,50 @@ export const PortfolioView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/40">
-              {orders.map(o => (
-                <tr key={o.id} className="hover:bg-slate-800/40 transition">
-                  <td className="py-2 px-3 text-slate-400 text-[11px]">{o.timestamp}</td>
-                  <td className="py-2 px-3 text-slate-300 font-bold">{o.id}</td>
-                  <td className="py-2 px-3 text-white font-bold">{o.symbol}</td>
-                  <td className="py-2 px-3">
-                    <span
-                      className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
-                        o.side === 'BUY'
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                          : 'bg-rose-950 text-rose-400 border border-rose-800'
-                      }`}
-                    >
-                      {o.side}
-                    </span>
-                  </td>
-                  <td className="py-2 px-3 text-slate-400">{o.type}</td>
-                  <td className="py-2 px-3 text-right font-bold text-white">{o.quantity}</td>
-                  <td className="py-2 px-3 text-right text-slate-300">
-                    ₹{(o.executedPrice || o.price).toFixed(2)}
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        o.status === 'EXECUTED'
-                          ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-700/60'
-                          : o.status === 'PENDING'
-                          ? 'bg-amber-950/70 text-amber-300 border border-amber-700/60'
-                          : 'bg-rose-950/70 text-rose-300 border border-rose-700/60'
-                      }`}
-                    >
-                      {o.status}
-                    </span>
+              {orders.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-slate-500">
+                    No trade orders placed yet. Execute Market or Limit orders from the terminal or watchlist.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                orders.map(o => (
+                  <tr key={o.id} className="hover:bg-slate-800/40 transition">
+                    <td className="py-2 px-3 text-slate-400 text-[11px]">{o.timestamp}</td>
+                    <td className="py-2 px-3 text-slate-300 font-bold">{o.id}</td>
+                    <td className="py-2 px-3 text-white font-bold">{o.symbol}</td>
+                    <td className="py-2 px-3">
+                      <span
+                        className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
+                          o.side === 'BUY'
+                            ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                            : 'bg-rose-950 text-rose-400 border border-rose-800'
+                        }`}
+                      >
+                        {o.side}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-slate-400">{o.type}</td>
+                    <td className="py-2 px-3 text-right font-bold text-white">{o.quantity}</td>
+                    <td className="py-2 px-3 text-right text-slate-300">
+                      ₹{(o.executedPrice || o.price).toFixed(2)}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          o.status === 'EXECUTED'
+                            ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-700/60'
+                            : o.status === 'PENDING'
+                            ? 'bg-amber-950/70 text-amber-300 border border-amber-700/60'
+                            : 'bg-rose-950/70 text-rose-300 border border-rose-700/60'
+                        }`}
+                      >
+                        {o.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         )}

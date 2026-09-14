@@ -15,10 +15,11 @@ import {
   StrategyRecommendation,
   GttOrder,
   AlertWebhookSettings,
+  TelegramSignal,
 } from '../types/market';
-import { INITIAL_TICKERS, INITIAL_AUDIT_LOGS, WORLD_CLASS_STRATEGIES, INITIAL_GTT_ORDERS, DEFAULT_WEBHOOK_SETTINGS } from '../data/mockMarketData';
+import { INITIAL_TICKERS, INITIAL_AUDIT_LOGS, WORLD_CLASS_STRATEGIES, INITIAL_GTT_ORDERS, DEFAULT_WEBHOOK_SETTINGS, INITIAL_TELEGRAM_SIGNALS } from '../data/mockMarketData';
 import { playAlertPing } from '../utils/audioAlert';
-import { logAuditEvent, fetchDeveloperSettings, fetchMarketTickers, fetchGttOrders, createGttOrder as apiCreateGtt, cancelGttOrder as apiCancelGtt, testWebhookAlert } from '../services/api';
+import { logAuditEvent, fetchDeveloperSettings, fetchMarketTickers, fetchGttOrders, createGttOrder as apiCreateGtt, cancelGttOrder as apiCancelGtt, testWebhookAlert, fetchTelegramSignals, broadcastTelegramSignal as apiBroadcastTelegram } from '../services/api';
 
 interface NotificationItem {
   id: string;
@@ -39,6 +40,9 @@ interface TradingContextType {
   customWatchlist: string[];
   addToCustomWatchlist: (symbol: string) => void;
   removeFromCustomWatchlist: (symbol: string) => void;
+  reorderCustomWatchlist: (newOrder: string[]) => void;
+  moveCustomWatchlistSymbol: (symbol: string, direction: 'UP' | 'DOWN' | 'TOP') => void;
+  reorderTickers: (newTickers: Ticker[]) => void;
   
   // Portfolio
   cashBalance: number;
@@ -84,10 +88,13 @@ interface TradingContextType {
   soundEnabled: boolean;
   setSoundEnabled: (enabled: boolean) => void;
 
-  // Webhook Alert Dispatch (Telegram / WhatsApp)
+  // Webhook & Telegram Signal Dispatch
   webhookSettings: AlertWebhookSettings;
   updateWebhookSettings: (settings: AlertWebhookSettings) => void;
   dispatchWebhookTest: (channel: 'telegram' | 'whatsapp') => Promise<{ success: boolean; message: string }>;
+  telegramSignals: TelegramSignal[];
+  broadcastSignalToTelegram: (signalData: Partial<TelegramSignal> & { customNote?: string }) => Promise<{ success: boolean; message: string; data?: TelegramSignal }>;
+  refreshTelegramSignals: () => Promise<void>;
 
   // Broker & Developer
   brokerConnected: boolean;
@@ -121,148 +128,34 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [watchlistType, setWatchlistType] = useState<'NIFTY50' | 'FO' | 'GLOBAL' | 'CUSTOM'>('NIFTY50');
   const [customWatchlist, setCustomWatchlist] = useState<string[]>(['RELIANCE', 'TCS', 'HDFCBANK', 'GIFT NIFTY', 'S&P 500']);
 
-  // Portfolio State
-  const [cashBalance, setCashBalance] = useState<number>(245800.50);
-  const [usedMargin, setUsedMargin] = useState<number>(34200.00);
+  // Portfolio State - Clean Production Initial State (No fake mock trades)
+  const [cashBalance, setCashBalance] = useState<number>(250000.00);
+  const [usedMargin, setUsedMargin] = useState<number>(0.00);
 
-  const [holdings, setHoldings] = useState<Holding[]>([
-    {
-      symbol: 'RELIANCE',
-      name: 'Reliance Industries Ltd',
-      quantity: 50,
-      avgCost: 2840.00,
-      ltp: 2985.40,
-      curVal: 149270.00,
-      totalPnl: 7270.00,
-      totalPnlPercent: 5.12,
-      dayPnl: 1425.00,
-    },
-    {
-      symbol: 'HDFCBANK',
-      name: 'HDFC Bank Ltd',
-      quantity: 100,
-      avgCost: 1580.00,
-      ltp: 1648.70,
-      curVal: 164870.00,
-      totalPnl: 6870.00,
-      totalPnlPercent: 4.35,
-      dayPnl: 1420.00,
-    },
-    {
-      symbol: 'TATAMOTORS',
-      name: 'Tata Motors Ltd',
-      quantity: 150,
-      avgCost: 910.00,
-      ltp: 982.50,
-      curVal: 147375.00,
-      totalPnl: 10875.00,
-      totalPnlPercent: 7.96,
-      dayPnl: 3360.00,
-    }
-  ]);
-
-  const [positions, setPositions] = useState<Position[]>([
-    {
-      id: 'pos-1',
-      symbol: 'NIFTY 50',
-      side: 'BUY',
-      product: 'MIS',
-      quantity: 50,
-      avgPrice: 24780.00,
-      currentPrice: 24824.50,
-      pnl: 2225.00,
-      pnlPercent: 0.18,
-      instrumentType: 'INDEX',
-    },
-    {
-      id: 'pos-2',
-      symbol: 'INFY',
-      side: 'BUY',
-      product: 'MIS',
-      quantity: 100,
-      avgPrice: 1832.00,
-      currentPrice: 1845.20,
-      pnl: 1320.00,
-      pnlPercent: 0.72,
-      instrumentType: 'EQUITY',
-    }
-  ]);
-
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: 'ord-8812',
-      symbol: 'NIFTY 50',
-      side: 'BUY',
-      type: 'MARKET',
-      product: 'MIS',
-      quantity: 50,
-      price: 24780.00,
-      executedPrice: 24780.00,
-      status: 'EXECUTED',
-      timestamp: new Date(Date.now() - 3600000).toLocaleTimeString(),
-      brokerMode: 'ANGELONE',
-    },
-    {
-      id: 'ord-8813',
-      symbol: 'INFY',
-      side: 'BUY',
-      type: 'LIMIT',
-      product: 'MIS',
-      quantity: 100,
-      price: 1832.00,
-      executedPrice: 1832.00,
-      status: 'EXECUTED',
-      timestamp: new Date(Date.now() - 1800000).toLocaleTimeString(),
-      brokerMode: 'ANGELONE',
-    }
-  ]);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
 
   // Alerts & Notifications
-  const [alerts, setAlerts] = useState<PriceAlert[]>([
-    {
-      id: 'alt-1',
-      symbol: 'NIFTY 50',
-      targetPrice: 24900.00,
-      condition: 'GTE',
-      note: 'All-time high resistance breakout test',
-      createdAt: new Date().toLocaleTimeString(),
-      triggered: false,
-    },
-    {
-      id: 'alt-2',
-      symbol: 'RELIANCE',
-      targetPrice: 3000.00,
-      condition: 'GTE',
-      note: 'Major psychological barrier crossing',
-      createdAt: new Date().toLocaleTimeString(),
-      triggered: false,
-    }
-  ]);
+  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([
     {
       id: 'notif-1',
-      title: 'Welcome to ShareMarket Pro',
-      message: '15-Day Free Trial activated. SEBI regulatory compliance guidelines in effect.',
+      title: 'Welcome to ScalpingPro Terminal',
+      message: 'Clean workspace initialized. Connect Angel One SmartAPI or test algorithmic strategies in Paper Trading mode.',
       timestamp: 'Just now',
       type: 'SYSTEM',
       read: false,
     },
-    {
-      id: 'notif-2',
-      title: 'Angel One SmartAPI Ready',
-      message: 'Connected to broker gateway with low-latency feed token.',
-      timestamp: '5m ago',
-      type: 'SYSTEM',
-      read: false,
-    }
   ]);
 
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
   // GTT Orders & Webhook Settings
-  const [gttOrders, setGttOrders] = useState<GttOrder[]>(INITIAL_GTT_ORDERS);
+  const [gttOrders, setGttOrders] = useState<GttOrder[]>([]);
   const [webhookSettings, setWebhookSettings] = useState<AlertWebhookSettings>(DEFAULT_WEBHOOK_SETTINGS);
+  const [telegramSignals, setTelegramSignals] = useState<TelegramSignal[]>(INITIAL_TELEGRAM_SIGNALS);
 
   // Broker & Developer
   const [brokerConnected, setBrokerConnected] = useState<boolean>(true);
@@ -683,6 +576,36 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCustomWatchlist(prev => prev.filter(s => s !== symbol));
   }, []);
 
+  const reorderCustomWatchlist = useCallback((newOrder: string[]) => {
+    setCustomWatchlist(newOrder);
+  }, []);
+
+  const moveCustomWatchlistSymbol = useCallback((symbol: string, direction: 'UP' | 'DOWN' | 'TOP') => {
+    setCustomWatchlist(prev => {
+      const idx = prev.indexOf(symbol);
+      if (idx === -1) return prev;
+      const copy = [...prev];
+      if (direction === 'TOP') {
+        copy.splice(idx, 1);
+        return [symbol, ...copy];
+      }
+      if (direction === 'UP' && idx > 0) {
+        const temp = copy[idx - 1];
+        copy[idx - 1] = copy[idx];
+        copy[idx] = temp;
+      } else if (direction === 'DOWN' && idx < copy.length - 1) {
+        const temp = copy[idx + 1];
+        copy[idx + 1] = copy[idx];
+        copy[idx] = temp;
+      }
+      return copy;
+    });
+  }, []);
+
+  const reorderTickers = useCallback((newTickers: Ticker[]) => {
+    setTickers(newTickers);
+  }, []);
+
   const markNotificationRead = useCallback((id: string) => {
     setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
   }, []);
@@ -873,6 +796,51 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return res;
   }, [webhookSettings, soundEnabled]);
 
+  const refreshTelegramSignals = useCallback(async () => {
+    try {
+      const signals = await fetchTelegramSignals();
+      if (signals && signals.length > 0) {
+        setTelegramSignals(signals);
+      }
+    } catch (err) {
+      console.warn('Error refreshing telegram signals:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshTelegramSignals();
+  }, [refreshTelegramSignals]);
+
+  const broadcastSignalToTelegram = useCallback(async (signalData: Partial<TelegramSignal> & { customNote?: string }) => {
+    const res = await apiBroadcastTelegram({
+      ...signalData,
+      channel: signalData.channel || webhookSettings.telegram.chatId,
+      botToken: webhookSettings.telegram.botToken,
+    });
+
+    if (res.data) {
+      setTelegramSignals(prev => [res.data!, ...prev]);
+    }
+
+    if (soundEnabled) {
+      playAlertPing('alert');
+    }
+
+    setNotifications(prev => [
+      {
+        id: `notif-${Date.now()}`,
+        title: `Telegram Signal Broadcasted: ${signalData.symbol || 'NIFTY'}`,
+        message: res.message,
+        timestamp: 'Just now',
+        type: 'ALERT',
+        read: false,
+      },
+      ...prev,
+    ]);
+
+    return res;
+  }, [webhookSettings, soundEnabled]);
+
   return (
     <TradingContext.Provider
       value={{
@@ -885,6 +853,9 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         customWatchlist,
         addToCustomWatchlist,
         removeFromCustomWatchlist,
+        reorderCustomWatchlist,
+        moveCustomWatchlistSymbol,
+        reorderTickers,
 
         cashBalance,
         usedMargin,
@@ -911,10 +882,13 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         soundEnabled,
         setSoundEnabled,
 
-        // Webhook integration
+        // Webhook & Telegram integration
         webhookSettings,
         updateWebhookSettings,
         dispatchWebhookTest,
+        telegramSignals,
+        broadcastSignalToTelegram,
+        refreshTelegramSignals,
 
         brokerConnected,
         brokerName,

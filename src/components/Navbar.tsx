@@ -17,6 +17,7 @@ import {
   FileText,
   Zap,
   RefreshCw,
+  Send,
 } from 'lucide-react';
 import { useTrading } from '../context/TradingContext';
 
@@ -26,6 +27,7 @@ interface NavbarProps {
   onOpenSubscriptionModal: () => void;
   onOpenAlertsModal: () => void;
   onOpenSebiDocModal: () => void;
+  onOpenTelegramModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -34,6 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSubscriptionModal,
   onOpenAlertsModal,
   onOpenSebiDocModal,
+  onOpenTelegramModal,
 }) => {
   const {
     tickers,
@@ -53,6 +56,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     simulationEnabled,
     setSimulationEnabled,
     refreshLiveQuotes,
+    webhookSettings,
+    telegramSignals,
   } = useTrading();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -353,10 +358,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
+          {/* Telegram Signals Channel Button */}
+          {onOpenTelegramModal && (
+            <button
+              onClick={onOpenTelegramModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-500/40 bg-sky-950/40 text-sky-300 hover:bg-sky-900/40 text-xs font-semibold transition cursor-pointer"
+              title={`Telegram Signals Channel (${webhookSettings.telegram.chatId || '@scalpingpro_signals'})`}
+            >
+              <Send className="h-3.5 w-3.5 text-sky-400" />
+              <span className="hidden lg:inline">Telegram Signals</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-mono">
+                {telegramSignals.length}
+              </span>
+            </button>
+          )}
+
           {/* Developer Option Button */}
           <button
             onClick={onOpenDeveloperModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/40 text-indigo-300 hover:bg-indigo-900/40 text-xs font-semibold transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/40 text-indigo-300 hover:bg-indigo-900/40 text-xs font-semibold transition cursor-pointer"
             title="Developer Settings & Audit Trail Logs"
           >
             <Code2 className="h-3.5 w-3.5 text-indigo-400" />

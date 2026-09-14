@@ -166,6 +166,10 @@ export interface AlertWebhookSettings {
     botToken: string;
     chatId: string;
     isConnected: boolean;
+    channelName?: string;
+    autoBroadcastAiSignals?: boolean;
+    autoBroadcastGttTriggers?: boolean;
+    autoBroadcastPriceAlerts?: boolean;
   };
   whatsapp: {
     enabled: boolean;
@@ -173,6 +177,118 @@ export interface AlertWebhookSettings {
     recipientNumber: string;
     isConnected: boolean;
   };
+}
+
+export interface SMCStrikeCandidate {
+  strike: number;
+  optionType: 'CE' | 'PE';
+  delta: number;
+  ltp: number;
+  iv: number;
+  oi: number;
+  volume: number;
+  spread: number;
+  score: number;
+  isSelected: boolean;
+  reason: string;
+}
+
+export interface SMCStrategySignal {
+  decision: 'BUY_CE' | 'BUY_PE' | 'NO_TRADE';
+  underlying: string;
+  spot: number;
+  setup: 'LOWER_SWEEP' | 'UPPER_SWEEP' | 'RANGE_SWEEP' | 'FVG_IMBALANCE_REACTION';
+  bias: 'BULLISH' | 'BEARISH' | 'RANGE';
+  strike: number;
+  optionSymbol: string;
+  optionType: 'CE' | 'PE';
+  entryUnderlying: number;
+  entryOption: number;
+  stopUnderlying: number;
+  stopOption: number;
+  target1Underlying: number;
+  target1Option: number;
+  target2Underlying: number;
+  target2Option: number;
+  target3Underlying: number;
+  target3Option: number;
+  rrT1: string; // "1:2"
+  rrT2: string; // "1:3"
+  rrT3: string; // "1:4"
+  confidenceT1: number; // e.g. 84.5%
+  confidenceT2: number; // e.g. 72.8%
+  confidenceT3: number; // e.g. 58.4%
+  slSafetyConfidence: number; // "Never-Hit Probability" e.g. 88.2%
+  scalpingConfidence: number; // e.g. 86.0%
+  riskAmount: number;
+  rewardAmountT1: number;
+  rewardAmountT2: number;
+  rewardAmountT3: number;
+  quantity: number;
+  lots: number;
+  strikeRanking: SMCStrikeCandidate[];
+  checklistPassed: string[];
+  checklistFailed: string[];
+  htfContext: {
+    pdh: number;
+    pdl: number;
+    swingHigh: number;
+    swingLow: number;
+    eqhEqlMarked: boolean;
+    bias: 'BULLISH' | 'BEARISH' | 'RANGE';
+  };
+  confirmation3m: {
+    chochOrBos: 'CHoCH' | 'BOS' | 'NONE';
+    secondaryType: 'CISD' | 'FVG' | 'ORDER_BLOCK';
+    candleClosed: boolean;
+    timeframe: string;
+  };
+  orderFlowImbalance: {
+    deltaImbalanceRatio: number;
+    bidAskDelta: number;
+    institutionalAbsorption: boolean;
+  };
+  reason: string;
+  timestamp: string;
+}
+
+export interface TelegramSignal {
+  id: string;
+  timestamp: string;
+  symbol: string;
+  action: 'BUY' | 'SELL' | 'STRATEGY' | 'ALERT' | 'BUY_CE' | 'BUY_PE' | 'NO_TRADE';
+  strategyName?: string;
+  entryPrice: number;
+  target1: number;
+  target2?: number;
+  target3?: number;
+  target1Rr?: string; // "1:2"
+  target2Rr?: string; // "1:3"
+  target3Rr?: string; // "1:4"
+  target1Confidence?: number; // %
+  target2Confidence?: number; // %
+  target3Confidence?: number; // %
+  slNeverHitProbability?: number; // %
+  scalpingConfidence?: number; // %
+  stopLoss: number;
+  riskReward: string;
+  winProbabilityPercent?: number;
+  timeframe?: string;
+  rationale?: string;
+  optionStrike?: string;
+  optionType?: 'CE' | 'PE';
+  optionEntry?: number;
+  optionSl?: number;
+  optionT1?: number;
+  optionT2?: number;
+  optionT3?: number;
+  smcDetails?: Partial<SMCStrategySignal>;
+  legs?: StrategyLeg[];
+  greeks?: { netDelta?: number; netTheta?: number; netVega?: number };
+  channel: string;
+  status: 'SENT' | 'FAILED' | 'PENDING';
+  messageId?: number;
+  rawText?: string;
 }
 
 export interface BacktestResult {
@@ -288,3 +404,205 @@ export interface UserProfile {
   brokerName: string;
   subscription: SubscriptionStatus;
 }
+
+export interface HistoricalTick {
+  time: string;
+  timestamp: number;
+  price: number;
+  volume: number;
+  bid: number;
+  ask: number;
+  orderFlowDelta: number; // buy volume - sell volume
+  sessionHigh: number;
+  sessionLow: number;
+  prevDayHigh: number;
+  prevDayLow: number;
+  sweepDetected?: 'BSL_SWEEP' | 'SSL_SWEEP' | 'EQL_SWEEP' | 'EQH_SWEEP';
+  fvgZone?: { top: number; bottom: number; type: 'BULLISH' | 'BEARISH' };
+}
+
+export interface SmcBacktestConfig {
+  symbol: string;
+  days: number; // 7, 30, 90 days
+  initialCapital: number;
+  riskPerTradePercent: number; // e.g., 1.5%
+  scaleOutT1Percent: number; // default 50%
+  scaleOutT2Percent: number; // default 30%
+  scaleOutT3Percent: number; // default 20%
+  moveSlToBreakevenAtT1: boolean;
+  trailSlToT1AtT2: boolean;
+  slippagePercent: number; // default 0.08%
+  brokeragePerOrder: number; // ₹20 flat Angel One brokerage
+  exchangeChargesRate: number; // STT, GST, SEBI fee ~ 0.05%
+  setupFilter?: 'ALL' | 'LOWER_SWEEP_ONLY' | 'UPPER_SWEEP_ONLY' | 'HIGH_CONFIDENCE_ONLY';
+}
+
+export interface SmcBacktestTrade {
+  id: string;
+  tradeNumber: number;
+  date: string;
+  entryTime: string;
+  exitTime: string;
+  symbol: string;
+  setupType: 'LOWER_SWEEP_BULLISH' | 'UPPER_SWEEP_BEARISH';
+  action: 'BUY_CE' | 'BUY_PE';
+  strikeInstrument: string;
+  spotEntry: number;
+  spotExit: number;
+  spotSl: number;
+  spotT1: number;
+  spotT2: number;
+  spotT3: number;
+  entryPremium: number;
+  exitPremium: number;
+  contracts: number;
+  lots: number;
+  quantity: number;
+  riskAmount: number;
+  grossPnl: number;
+  slippageAndCharges: number;
+  netPnl: number;
+  pnlPercent: number;
+  capitalAfterTrade: number;
+  returnOnCapital: number;
+  exitReason: 'TARGET_1_HIT' | 'TARGET_2_HIT' | 'TARGET_3_HIT' | 'SL_HIT' | 'BREAKEVEN_EXIT' | 'EOD_SQUAREOFF';
+  durationMinutes: number;
+  rMultiple: number; // R:R achieved (e.g. +2.8R, -1.0R, +0.2R)
+  isWin: boolean;
+}
+
+export interface SmcBacktestSummary {
+  config: SmcBacktestConfig;
+  symbol: string;
+  periodLabel: string;
+  totalTicksAnalyzed: number;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  breakevenTrades: number;
+  winRate: number; // %
+  lossRate: number; // %
+  initialCapital: number;
+  finalCapital: number;
+  netProfit: number; // ₹
+  netReturnPercent: number; // %
+  profitFactor: number;
+  grossProfit: number;
+  grossLoss: number;
+  avgWin: number;
+  avgLoss: number;
+  winLossRatio: number;
+  maxDrawdown: number; // ₹
+  maxDrawdownPercent: number; // %
+  sharpeRatio: number;
+  sortinoRatio: number;
+  expectancyR: number; // R per trade
+  maxConsecutiveWins: number;
+  maxConsecutiveLosses: number;
+  avgTradeDurationMinutes: number;
+  totalChargesPaid: number;
+  equityCurve: {
+    tradeNumber: number;
+    date: string;
+    equity: number;
+    drawdown: number;
+    drawdownPercent: number;
+    benchmarkEquity: number;
+  }[];
+  monthlyPerformance: {
+    month: string;
+    trades: number;
+    winRate: number;
+    netPnl: number;
+    returnPercent: number;
+  }[];
+  regimeBreakdown: {
+    regime: string;
+    trades: number;
+    winRate: number;
+    netPnl: number;
+    profitFactor: number;
+  }[];
+  trades: SmcBacktestTrade[];
+}
+
+export type SmcStructureType = 'ORDER_BLOCK' | 'FAIR_VALUE_GAP' | 'LIQUIDITY_SWEEP' | 'STRUCTURE_BREAK' | 'LIQUIDITY_POOL';
+
+export interface SmcOrderBlock {
+  id: string;
+  type: 'BULLISH_OB' | 'BEARISH_OB';
+  startIndex: number;
+  endIndex: number;
+  top: number;
+  bottom: number;
+  meanThreshold: number; // 50% equilibrium level
+  status: 'FRESH' | 'TESTED' | 'MITIGATED';
+  volumeScore: number;
+  label: string;
+  mitigationIndex?: number;
+  createdTime: string;
+}
+
+export interface SmcFairValueGap {
+  id: string;
+  type: 'BULLISH_FVG' | 'BEARISH_FVG';
+  startIndex: number;
+  endIndex: number;
+  top: number;
+  bottom: number;
+  consequentEncroachment: number; // 50% CE level
+  status: 'ACTIVE' | 'PARTIALLY_FILLED' | 'FILLED';
+  fillPercent: number;
+  label: string;
+  createdTime: string;
+}
+
+export interface SmcLiquiditySweep {
+  id: string;
+  type: 'SSL_SWEEP' | 'BSL_SWEEP';
+  candleIndex: number;
+  levelSwept: number;
+  extremePrice: number;
+  rejectionClose: number;
+  sweepVolume: number;
+  institutionalReaction: boolean;
+  label: string;
+  biasResult: 'BULLISH' | 'BEARISH';
+  createdTime: string;
+}
+
+export interface SmcStructureBreak {
+  id: string;
+  type: 'BOS_BULLISH' | 'BOS_BEARISH' | 'CHOCH_BULLISH' | 'CHOCH_BEARISH';
+  fromIndex: number;
+  toIndex: number;
+  level: number;
+  label: string;
+  createdTime: string;
+}
+
+export interface SmcLiquidityPool {
+  id: string;
+  type: 'EQH' | 'EQL';
+  indices: number[];
+  price: number;
+  label: string;
+  createdTime: string;
+}
+
+export interface SmcScanResults {
+  orderBlocks: SmcOrderBlock[];
+  fairValueGaps: SmcFairValueGap[];
+  liquiditySweeps: SmcLiquiditySweep[];
+  structureBreaks: SmcStructureBreak[];
+  liquidityPools: SmcLiquidityPool[];
+  activeSetupSummary: {
+    bias: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    keyLevel: number;
+    recommendedAction: string;
+    freshObCount: number;
+    activeFvgCount: number;
+    recentSweep: SmcLiquiditySweep | null;
+  };
+}
+

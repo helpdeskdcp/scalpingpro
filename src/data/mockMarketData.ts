@@ -739,8 +739,12 @@ export const DEFAULT_WEBHOOK_SETTINGS = {
   telegram: {
     enabled: true,
     botToken: '6891238491:AAH8kqZ_DemoTelegramBotToken_TradingPro',
-    chatId: '@sharemarket_pro_alerts',
+    chatId: '@scalpingpro_signals',
+    channelName: 'ScalpingPro • Live Trade Signals',
     isConnected: true,
+    autoBroadcastAiSignals: true,
+    autoBroadcastGttTriggers: true,
+    autoBroadcastPriceAlerts: true,
   },
   whatsapp: {
     enabled: false,
@@ -749,4 +753,75 @@ export const DEFAULT_WEBHOOK_SETTINGS = {
     isConnected: false,
   }
 };
+
+export const INITIAL_TELEGRAM_SIGNALS = [
+  {
+    id: 'sig-001',
+    timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    symbol: 'NIFTY 50',
+    action: 'BUY' as const,
+    strategyName: 'Bull Call Spread (24800 CE / 25000 CE)',
+    entryPrice: 24824.50,
+    target1: 25020.00,
+    target2: 25150.00,
+    stopLoss: 24690.00,
+    riskReward: '1 : 2.4',
+    winProbabilityPercent: 71.5,
+    timeframe: 'Intraday / Weekly',
+    rationale: 'Heavy call unwinding detected at 24800 strike; Put-Call Ratio expanded from 0.98 to 1.16 with GIFT Nifty momentum.',
+    channel: '@scalpingpro_signals',
+    status: 'SENT' as const,
+    messageId: 1042,
+    legs: [
+      { action: 'BUY' as const, instrument: 'NIFTY 24800 CE', strike: 24800, optionType: 'CE' as const, lots: 1, estPrice: 142.50 },
+      { action: 'SELL' as const, instrument: 'NIFTY 25000 CE', strike: 25000, optionType: 'CE' as const, lots: 1, estPrice: 48.20 }
+    ],
+    greeks: { netDelta: 0.28, netTheta: -3.4, netVega: 1.2 }
+  },
+  {
+    id: 'sig-002',
+    timestamp: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
+    symbol: 'BANKNIFTY',
+    action: 'STRATEGY' as const,
+    strategyName: 'Iron Condor (Delta-Neutral Theta Harvester)',
+    entryPrice: 51940.80,
+    target1: 52300.00,
+    target2: 51500.00,
+    stopLoss: 52650.00,
+    riskReward: '1 : 1.8',
+    winProbabilityPercent: 68.2,
+    timeframe: 'Weekly Expiry',
+    rationale: 'IV Rank at 48th percentile with symmetric open interest concentration between 51500 PE and 52500 CE.',
+    channel: '@scalpingpro_signals',
+    status: 'SENT' as const,
+    messageId: 1041,
+    legs: [
+      { action: 'SELL' as const, instrument: 'BANKNIFTY 52500 CE', strike: 52500, optionType: 'CE' as const, lots: 1, estPrice: 88.00 },
+      { action: 'BUY' as const, instrument: 'BANKNIFTY 52800 CE', strike: 52800, optionType: 'CE' as const, lots: 1, estPrice: 32.00 },
+      { action: 'SELL' as const, instrument: 'BANKNIFTY 51500 PE', strike: 51500, optionType: 'PE' as const, lots: 1, estPrice: 94.00 },
+      { action: 'BUY' as const, instrument: 'BANKNIFTY 51200 PE', strike: 51200, optionType: 'PE' as const, lots: 1, estPrice: 38.00 }
+    ],
+    greeks: { netDelta: 0.02, netTheta: 14.8, netVega: -6.4 }
+  },
+  {
+    id: 'sig-003',
+    timestamp: new Date(Date.now() - 140 * 60 * 1000).toISOString(),
+    symbol: 'RELIANCE',
+    action: 'BUY' as const,
+    strategyName: 'Breakout Momentum Call (Cash / FUT Equivalent)',
+    entryPrice: 2985.40,
+    target1: 3040.00,
+    target2: 3080.00,
+    stopLoss: 2940.00,
+    riskReward: '1 : 2.1',
+    winProbabilityPercent: 66.8,
+    timeframe: 'Swing / 3-5 Days',
+    rationale: 'Consolidation breakout above 2960 resistance on 1.8x average volume with bullish RSI divergence.',
+    channel: '@scalpingpro_signals',
+    status: 'SENT' as const,
+    messageId: 1040,
+    greeks: { netDelta: 0.65, netTheta: -1.2, netVega: 0.8 }
+  }
+];
+
 

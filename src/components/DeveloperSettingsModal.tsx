@@ -460,6 +460,7 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
                     value={webhookSettings.whatsapp.webhookUrl}
                     onChange={e =>
                       updateWebhookSettings({
+                        ...webhookSettings,
                         whatsapp: { ...webhookSettings.whatsapp, webhookUrl: e.target.value },
                       })
                     }
@@ -471,10 +472,11 @@ export const DeveloperSettingsModal: React.FC<DeveloperSettingsModalProps> = ({
                   <label className="text-[10px] text-slate-400 uppercase block mb-1">Phone Number (+91...)</label>
                   <input
                     type="text"
-                    value={webhookSettings.whatsapp.phoneNumber}
+                    value={webhookSettings.whatsapp.recipientNumber}
                     onChange={e =>
                       updateWebhookSettings({
-                        whatsapp: { ...webhookSettings.whatsapp, phoneNumber: e.target.value },
+                        ...webhookSettings,
+                        whatsapp: { ...webhookSettings.whatsapp, recipientNumber: e.target.value },
                       })
                     }
                     placeholder="+919876543210"

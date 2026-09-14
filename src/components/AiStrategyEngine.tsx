@@ -17,11 +17,15 @@ import {
   Activity,
   Award,
   Calendar,
+  Send,
+  Layers,
 } from 'lucide-react';
 import { useTrading } from '../context/TradingContext';
 import { WORLD_CLASS_STRATEGIES } from '../data/mockMarketData';
 import { StrategyRecommendation, BacktestResult } from '../types/market';
 import { requestAiStrategyAnalysis, runStrategyBacktest } from '../services/api';
+import { SmcStrategyCard } from './SmcStrategyCard';
+import { SmcBacktestModal } from './SmcBacktestModal';
 
 export const AiStrategyEngine: React.FC = () => {
   const {
@@ -32,12 +36,19 @@ export const AiStrategyEngine: React.FC = () => {
     setActiveStrategy,
     allStrategies,
     setAllStrategies,
+    webhookSettings,
+    broadcastSignalToTelegram,
   } = useTrading();
   
+  const [engineTab, setEngineTab] = useState<'SMC_SCALPING' | 'OPTIONS_PORTFOLIO'>('SMC_SCALPING');
   const [selectedRisk, setSelectedRisk] = useState<'CONSERVATIVE' | 'BALANCED' | 'AGGRESSIVE'>(activeStrategy.riskLevel || 'BALANCED');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysisResult, setAiAnalysisResult] = useState<any>(null);
   const [executionNotice, setExecutionNotice] = useState<string | null>(null);
+  const [isTelegramSending, setIsTelegramSending] = useState(false);
+
+  // SMC High-Frequency Tick Backtest State
+  const [smcBacktestModalOpen, setSmcBacktestModalOpen] = useState(false);
 
   // Backtesting State
   const [showBacktestModal, setShowBacktestModal] = useState(false);
@@ -129,6 +140,34 @@ export const AiStrategyEngine: React.FC = () => {
     setTimeout(() => setExecutionNotice(null), 5000);
   };
 
+  const handleBroadcastTelegram = async () => {
+    setIsTelegramSending(true);
+    try {
+      const res = await broadcastSignalToTelegram({
+        symbol: activeTicker.symbol,
+        action: activeStrategy.category === 'DIRECTIONAL_BULL' ? 'BUY' : activeStrategy.category === 'DIRECTIONAL_BEAR' ? 'SELL' : 'STRATEGY',
+        strategyName: activeStrategy.name,
+        entryPrice: activeTicker.ltp,
+        target1: Number((activeTicker.ltp * 1.012).toFixed(2)),
+        target2: Number((activeTicker.ltp * 1.024).toFixed(2)),
+        stopLoss: Number((activeTicker.ltp * 0.992).toFixed(2)),
+        riskReward: activeStrategy.riskRewardRatio,
+        winProbabilityPercent: activeStrategy.winProbabilityPercent,
+        timeframe: 'Intraday (F&O Expiry)',
+        rationale: activeStrategy.rationale,
+        legs: activeStrategy.legs,
+        greeks: activeStrategy.greeksProfile,
+        channel: webhookSettings.telegram.chatId,
+      });
+      setExecutionNotice(`📡 Signal broadcasted to Telegram Channel ${webhookSettings.telegram.chatId || '@scalpingpro_signals'} successfully!`);
+      setTimeout(() => setExecutionNotice(null), 5000);
+    } catch (err: any) {
+      setExecutionNotice(`⚠️ Telegram broadcast error: ${err.message}`);
+    } finally {
+      setIsTelegramSending(false);
+    }
+  };
+
   return (
     <div className="bg-[#0b101d] rounded-xl border border-slate-800/90 flex flex-col overflow-hidden">
       {/* Header */}
@@ -173,173 +212,233 @@ export const AiStrategyEngine: React.FC = () => {
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Market Regime & Risk Level Selectors */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {/* Regime Badge */}
-          <div className="p-3 rounded-lg bg-[#090d16] border border-slate-800">
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between mb-1">
-              <span>Detected Market Regime</span>
-              <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live Scan
+        {/* Top Strategy Engine Navigation Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setEngineTab('SMC_SCALPING')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold font-mono transition flex items-center gap-2 cursor-pointer ${
+                engineTab === 'SMC_SCALPING'
+                  ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-md shadow-cyan-950/50 border border-cyan-400/40'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
+              Smart Money &amp; ITM Scalping (ICT/SMC)
+              <span className="px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 text-[10px]">
+                T1 (1:2) • T2 (1:3) • T3 (1:4)
               </span>
-            </div>
-            <div className="font-mono font-bold text-sm text-cyan-300">
-              {activeStrategy.marketRegime}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-1">
-              Global bias: Positive cues from GIFT Nifty &amp; US Tech, low historical IV.
-            </div>
+            </button>
+
+            <button
+              onClick={() => setEngineTab('OPTIONS_PORTFOLIO')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold font-mono transition flex items-center gap-2 cursor-pointer ${
+                engineTab === 'OPTIONS_PORTFOLIO'
+                  ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-md shadow-indigo-950/50 border border-indigo-400/40'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5 text-indigo-300" />
+              Multi-Leg Options Strategies
+              <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 text-[10px]">
+                {allStrategies.length} Presets
+              </span>
+            </button>
           </div>
 
-          {/* Risk Level Selector */}
-          <div className="p-3 rounded-lg bg-[#090d16] border border-slate-800">
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-              <span>Dynamic Risk Profile</span>
-              <span className="text-[10px] text-slate-500 font-mono">SEBI Risk Categorization</span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-1.5">
-              {(['CONSERVATIVE', 'BALANCED', 'AGGRESSIVE'] as const).map(risk => (
-                <button
-                  key={risk}
-                  onClick={() => handleRiskChange(risk)}
-                  className={`py-1.5 px-2 rounded-md font-mono text-[11px] font-bold transition border ${
-                    selectedRisk === risk
-                      ? risk === 'CONSERVATIVE'
-                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
-                        : risk === 'BALANCED'
-                        ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300'
-                        : 'bg-rose-950/80 border-rose-500 text-rose-300'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {risk}
-                </button>
-              ))}
-            </div>
-          </div>
+          <button
+            onClick={() => setSmcBacktestModalOpen(true)}
+            className="px-3.5 py-2 rounded-lg bg-indigo-950 hover:bg-indigo-900 border border-indigo-500/60 text-indigo-300 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-indigo-950"
+          >
+            <BarChart2 className="h-4 w-4 text-indigo-400" />
+            Tick Data Backtest Engine
+          </button>
         </div>
 
-        {/* Active Strategy Card */}
-        <div className="p-4 rounded-xl bg-gradient-to-b from-slate-900/90 to-[#0c1220] border border-slate-700/80 shadow-xl space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base text-white tracking-tight">
-                  {activeStrategy.name}
-                </h3>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-slate-800 text-slate-300 border border-slate-700">
-                  {activeStrategy.category}
-                </span>
+        {engineTab === 'SMC_SCALPING' ? (
+          <SmcStrategyCard />
+        ) : (
+          <>
+            {/* Market Regime & Risk Level Selectors */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Regime Badge */}
+              <div className="p-3 rounded-lg bg-[#090d16] border border-slate-800">
+                <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between mb-1">
+                  <span>Detected Market Regime</span>
+                  <span className="text-[10px] text-emerald-400 flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Live Scan
+                  </span>
+                </div>
+                <div className="font-mono font-bold text-sm text-cyan-300">
+                  {activeStrategy.marketRegime}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  Global bias: Positive cues from GIFT Nifty &amp; US Tech, low historical IV.
+                </div>
               </div>
-              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                {activeStrategy.rationale}
-              </p>
-            </div>
 
-            {/* CRITICAL SEBI COMPLIANCE: PROBABILITY IN %, ZERO GUARANTEES */}
-            <div className="text-right">
-              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                Win Probability
-              </div>
-              <div className="font-mono font-extrabold text-2xl text-emerald-400 flex items-center justify-end gap-1">
-                <span>{activeStrategy.winProbabilityPercent}%</span>
-                <span className="text-[11px] font-normal text-slate-400">Prob.</span>
-              </div>
-              <div className="text-[10px] text-amber-300 font-semibold flex items-center justify-end gap-1 mt-0.5">
-                <ShieldAlert className="h-3 w-3 text-amber-400" />
-                Strictly Probabilistic • No Guarantee (गॅरंटी)
-              </div>
-            </div>
-          </div>
+              {/* Risk Level Selector */}
+              <div className="p-3 rounded-lg bg-[#090d16] border border-slate-800">
+                <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Dynamic Risk Profile</span>
+                  <span className="text-[10px] text-slate-500 font-mono">SEBI Risk Categorization</span>
+                </div>
 
-          {/* Strategy Metrics Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800 text-xs font-mono">
-            <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-              <span className="text-slate-500 text-[10px] block">Risk-Reward Ratio</span>
-              <span className="font-bold text-slate-200">{activeStrategy.riskRewardRatio}</span>
-            </div>
-            <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-              <span className="text-slate-500 text-[10px] block">Estimated Max Profit</span>
-              <span className="font-bold text-emerald-400">{activeStrategy.maxProfit}</span>
-            </div>
-            <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-              <span className="text-slate-500 text-[10px] block">Max Defined Risk</span>
-              <span className="font-bold text-rose-400">{activeStrategy.maxLoss}</span>
-            </div>
-            <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-              <span className="text-slate-500 text-[10px] block">Delta / Theta Decay</span>
-              <span className="font-bold text-cyan-300">
-                Δ {activeStrategy.greeksProfile.netDelta} | θ +{activeStrategy.greeksProfile.netTheta}/d
-              </span>
-            </div>
-          </div>
-
-          {/* Multi-Leg Breakdown */}
-          <div className="pt-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
-              Multi-Leg Execution Structure ({activeStrategy.legs.length} Legs)
-            </div>
-            <div className="space-y-1.5">
-              {activeStrategy.legs.map((leg, idx) => (
-                <div
-                  key={idx}
-                  className="p-2 rounded-lg bg-[#090d16] border border-slate-800 flex items-center justify-between text-xs font-mono"
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2 py-0.5 rounded font-extrabold text-[10px] ${
-                        leg.action === 'BUY'
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                          : 'bg-rose-950 text-rose-400 border border-rose-800'
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(['CONSERVATIVE', 'BALANCED', 'AGGRESSIVE'] as const).map(risk => (
+                    <button
+                      key={risk}
+                      onClick={() => handleRiskChange(risk)}
+                      className={`py-1.5 px-2 rounded-md font-mono text-[11px] font-bold transition border ${
+                        selectedRisk === risk
+                          ? risk === 'CONSERVATIVE'
+                            ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+                            : risk === 'BALANCED'
+                            ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300'
+                            : 'bg-rose-950/80 border-rose-500 text-rose-300'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
                       }`}
                     >
-                      {leg.action}
+                      {risk}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Active Strategy Card */}
+            <div className="p-4 rounded-xl bg-gradient-to-b from-slate-900/90 to-[#0c1220] border border-slate-700/80 shadow-xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-base text-white tracking-tight">
+                      {activeStrategy.name}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-slate-800 text-slate-300 border border-slate-700">
+                      {activeStrategy.category}
                     </span>
-                    <span className="text-white font-semibold">{leg.instrument}</span>
-                    <span className="text-slate-500 text-[11px]">({leg.lots || 1} Lot)</span>
                   </div>
-                  <div className="text-slate-300">
-                    Est. Premium: <span className="text-white font-bold">₹{leg.estPrice.toFixed(2)}</span>
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                    {activeStrategy.rationale}
+                  </p>
+                </div>
+
+                {/* CRITICAL SEBI COMPLIANCE: PROBABILITY IN %, ZERO GUARANTEES */}
+                <div className="text-right">
+                  <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    Win Probability
+                  </div>
+                  <div className="font-mono font-extrabold text-2xl text-emerald-400 flex items-center justify-end gap-1">
+                    <span>{activeStrategy.winProbabilityPercent}%</span>
+                    <span className="text-[11px] font-normal text-slate-400">Prob.</span>
+                  </div>
+                  <div className="text-[10px] text-amber-300 font-semibold flex items-center justify-end gap-1 mt-0.5">
+                    <ShieldAlert className="h-3 w-3 text-amber-400" />
+                    Strictly Probabilistic • No Guarantee (गॅरंटी)
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          {/* Action Row & Compliance Disclaimer */}
-          <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="text-[11px] text-amber-300/90 leading-tight max-w-xl">
-              <strong>Mandatory SEBI Disclosure:</strong> Win probability ({activeStrategy.winProbabilityPercent}%) is mathematically estimated based on implied volatility and delta. Past statistical trends do not guarantee future performance.
-            </div>
+              {/* Strategy Metrics Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800 text-xs font-mono">
+                <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <span className="text-slate-500 text-[10px] block">Risk-Reward Ratio</span>
+                  <span className="font-bold text-slate-200">{activeStrategy.riskRewardRatio}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <span className="text-slate-500 text-[10px] block">Estimated Max Profit</span>
+                  <span className="font-bold text-emerald-400">{activeStrategy.maxProfit}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <span className="text-slate-500 text-[10px] block">Max Defined Risk</span>
+                  <span className="font-bold text-rose-400">{activeStrategy.maxLoss}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <span className="text-slate-500 text-[10px] block">Delta / Theta Decay</span>
+                  <span className="font-bold text-cyan-300">
+                    Δ {activeStrategy.greeksProfile.netDelta} | θ +{activeStrategy.greeksProfile.netTheta}/d
+                  </span>
+                </div>
+              </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={() => handleOpenBacktest()}
-                className="w-full sm:w-auto px-3.5 py-2 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-indigo-300 text-xs font-bold font-mono tracking-wider flex items-center justify-center gap-2 transition cursor-pointer"
-              >
-                <BarChart2 className="h-3.5 w-3.5 text-indigo-400" />
-                Historical Backtest
-              </button>
+              {/* Multi-Leg Breakdown */}
+              <div className="pt-2">
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+                  Multi-Leg Execution Structure ({activeStrategy.legs.length} Legs)
+                </div>
+                <div className="space-y-1.5">
+                  {activeStrategy.legs.map((leg, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 rounded-lg bg-[#090d16] border border-slate-800 flex items-center justify-between text-xs font-mono"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded font-extrabold text-[10px] ${
+                            leg.action === 'BUY'
+                              ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                              : 'bg-rose-950 text-rose-400 border border-rose-800'
+                          }`}
+                        >
+                          {leg.action}
+                        </span>
+                        <span className="text-white font-semibold">{leg.instrument}</span>
+                        <span className="text-slate-500 text-[11px]">({leg.lots || 1} Lot)</span>
+                      </div>
+                      <div className="text-slate-300">
+                        Est. Premium: <span className="text-white font-bold">₹{leg.estPrice.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-              <button
-                onClick={handleExecuteStrategy}
-                className="w-full sm:w-auto px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-mono tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition shrink-0 cursor-pointer"
-              >
-                <Play className="h-3.5 w-3.5 fill-current" />
-                Execute Strategy ({brokerMode})
-              </button>
-            </div>
-          </div>
+              {/* Action Row & Compliance Disclaimer */}
+              <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="text-[11px] text-amber-300/90 leading-tight max-w-xl">
+                  <strong>Mandatory SEBI Disclosure:</strong> Win probability ({activeStrategy.winProbabilityPercent}%) is mathematically estimated based on implied volatility and delta. Past statistical trends do not guarantee future performance.
+                </div>
 
-          {executionNotice && (
-            <div className="p-2.5 rounded-lg bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 text-xs font-mono animate-fadeIn">
-              {executionNotice}
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenBacktest()}
+                    className="w-full sm:w-auto px-3 py-2 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-indigo-300 text-xs font-bold font-mono tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  >
+                    <BarChart2 className="h-3.5 w-3.5 text-indigo-400" />
+                    Backtest
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBroadcastTelegram}
+                    disabled={isTelegramSending}
+                    className="w-full sm:w-auto px-3.5 py-2 rounded-lg bg-sky-950 hover:bg-sky-900 border border-sky-500/60 text-sky-300 text-xs font-bold font-mono tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                    title={`Broadcast to ${webhookSettings.telegram.chatId || '@scalpingpro_signals'}`}
+                  >
+                    <Send className="h-3.5 w-3.5 fill-current" />
+                    {isTelegramSending ? 'Broadcasting...' : 'Telegram Signal'}
+                  </button>
+
+                  <button
+                    onClick={handleExecuteStrategy}
+                    className="w-full sm:w-auto px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-mono tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition shrink-0 cursor-pointer"
+                  >
+                    <Play className="h-3.5 w-3.5 fill-current" />
+                    Execute ({brokerMode})
+                  </button>
+                </div>
+              </div>
+
+              {executionNotice && (
+                <div className="p-2.5 rounded-lg bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 text-xs font-mono animate-fadeIn">
+                  {executionNotice}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
 
       {/* Backtest Analysis Modal */}
@@ -549,6 +648,12 @@ export const AiStrategyEngine: React.FC = () => {
           </div>
         </div>
       )}
+      {/* High-Frequency Tick SMC Backtesting Modal */}
+      <SmcBacktestModal
+        isOpen={smcBacktestModalOpen}
+        onClose={() => setSmcBacktestModalOpen(false)}
+        defaultSymbol={activeTicker.symbol}
+      />
     </div>
   );
 };
